@@ -14,6 +14,10 @@ A desktop password unlocker for archives and PDFs, written in Rust with [GPUI Co
 - Live progress, rate, and cancel
 - **Chinese / English** UI toggle
 
+## Screenshot
+
+![Pass Smash UI](docs/screenshot-ui.png)
+
 ## Usage
 
 1. Drag files in, or click **Add files** (ZIP / 7Z / RAR / PDF / Office)  

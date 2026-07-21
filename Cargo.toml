@@ -1,0 +1,34 @@
+[package]
+name = "pass_smash"
+version = "0.1.0"
+edition = "2024"
+description = "Password unlock tool for archives, PDFs and Office files, built with GPUI Component"
+authors = ["pass_smash"]
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+anyhow = "1"
+rayon = "1.12"
+rfd = "0.17"
+parking_lot = "0.12"
+num_cpus = "1.17"
+
+# Archive / PDF / Office handlers - latest stable
+zip = { version = "8", features = ["aes-crypto", "deflate"] }
+lopdf = "0.44"
+sevenz-rust2 = "0.21"
+unrar = "0.5"
+office-crypto = "0.2"
+
+# UI - GPUI Component (Longbridge)
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true

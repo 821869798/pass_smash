@@ -1,0 +1,242 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify tag matches Cargo.toml version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          echo "tag version: ${tag_version}"
+          echo "Cargo version: ${cargo_version}"
+          test "${tag_version}" = "${cargo_version}"
+          if [[ "${tag_version}" == *-* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          echo "version=${tag_version}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --locked --bin pass_smash
+
+  create-release:
+    name: Create draft release
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create release if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; assets will be replaced."
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --prerelease="${PRERELEASE}"
+          else
+            release_args=(
+              --repo "${GITHUB_REPOSITORY}"
+              --verify-tag
+              --draft
+              --generate-notes
+              --title "Pass Smash ${GITHUB_REF_NAME}"
+            )
+            if [[ "${PRERELEASE}" == "true" ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh release create "${GITHUB_REF_NAME}" "${release_args[@]}"
+          fi
+
+  binaries:
+    name: Build ${{ matrix.asset }}
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: pass_smash-windows-x64.zip
+            kind: windows
+            binary: pass_smash.exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: pass_smash-linux-x64.tar.gz
+            kind: unix
+            binary: pass_smash
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: pass_smash-macos-arm64.tar.gz
+            kind: unix
+            binary: pass_smash
+          - os: macos-13
+            target: x86_64-apple-darwin
+            asset: pass_smash-macos-x64.tar.gz
+            kind: unix
+            binary: pass_smash
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # GPUI / font / X11 / Wayland desktop build deps
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            cmake \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libx11-dev \
+            libasound2-dev \
+            libssl-dev \
+            clang \
+            mold
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Xcode CLI tools are preinstalled on GitHub runners.
+          # Ensure cmake is available for native deps.
+          brew install cmake || true
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build release binary
+        shell: bash
+        run: cargo build --locked --release --target ${{ matrix.target }} --bin pass_smash
+
+      - name: Package Unix release
+        if: matrix.kind == 'unix'
+        env:
+          ASSET: ${{ matrix.asset }}
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "staging/pass_smash"
+          cp "target/${TARGET}/release/${BINARY}" "staging/pass_smash/${BINARY}"
+          chmod 755 "staging/pass_smash/${BINARY}"
+          cp README.md README.en.md "staging/pass_smash/"
+          if [[ -f LICENSE ]]; then cp LICENSE "staging/pass_smash/"; fi
+          tar -czf "${ASSET}" -C staging pass_smash
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ASSET}" > "${ASSET}.sha256"
+          else
+            shasum -a 256 "${ASSET}" > "${ASSET}.sha256"
+          fi
+
+      - name: Package Windows release
+        if: matrix.kind == 'windows'
+        env:
+          ASSET: ${{ matrix.asset }}
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging/pass_smash | Out-Null
+          Copy-Item "target/$env:TARGET/release/$env:BINARY" "staging/pass_smash/$env:BINARY"
+          Copy-Item README.md,README.en.md staging/pass_smash/
+          if (Test-Path LICENSE) { Copy-Item LICENSE staging/pass_smash/ }
+          Compress-Archive -Path staging/pass_smash/* -DestinationPath $env:ASSET -Force
+          $hash = (Get-FileHash -Algorithm SHA256 $env:ASSET).Hash.ToLowerInvariant()
+          "$hash  $env:ASSET" | Out-File "$env:ASSET.sha256" -Encoding ascii
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET: ${{ matrix.asset }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" \
+            "${ASSET}" "${ASSET}.sha256" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+
+  publish-release:
+    name: Publish GitHub release
+    needs:
+      - validate
+      - binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --draft=false \
+              --prerelease \
+              --latest=false
+          else
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --draft=false \
+              --prerelease=false \
+              --latest
+          fi

@@ -12,6 +12,10 @@ concurrency:
 permissions:
   contents: read
 
+# Prefer Node.js 24 for JS-based actions (checkout/cache/etc).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   validate:
     name: Validate release
@@ -20,7 +24,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -43,10 +47,43 @@ jobs:
           echo "version=${tag_version}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
 
+      - name: Install Linux dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            g++ \
+            pkg-config \
+            cmake \
+            clang \
+            lld \
+            llvm \
+            libasound2-dev \
+            libfontconfig-dev \
+            libfreetype6-dev \
+            libglib2.0-dev \
+            libssl-dev \
+            libsqlite3-dev \
+            libva-dev \
+            libvulkan1 \
+            libwayland-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libzstd-dev
+
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
+        shell: bash
         run: cargo test --locked --bin pass_smash
 
   create-release:
@@ -99,21 +136,21 @@ jobs:
             asset: pass_smash-linux-x64.tar.gz
             kind: unix
             binary: pass_smash
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset: pass_smash-linux-arm64.tar.gz
+            kind: unix
+            binary: pass_smash
           - os: macos-latest
             target: aarch64-apple-darwin
             asset: pass_smash-macos-arm64.tar.gz
-            kind: unix
-            binary: pass_smash
-          - os: macos-13
-            target: x86_64-apple-darwin
-            asset: pass_smash-macos-x64.tar.gz
             kind: unix
             binary: pass_smash
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -126,32 +163,40 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          # GPUI / font / X11 / Wayland desktop build deps
+          # GPUI/Zed desktop deps + C++ toolchain for unrar_sys
           sudo apt-get install -y \
             build-essential \
+            g++ \
             pkg-config \
             cmake \
-            libfontconfig1-dev \
+            clang \
+            lld \
+            llvm \
+            libasound2-dev \
+            libfontconfig-dev \
             libfreetype6-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
+            libglib2.0-dev \
+            libssl-dev \
+            libsqlite3-dev \
+            libva-dev \
+            libvulkan1 \
+            libwayland-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
-            libx11-dev \
-            libasound2-dev \
-            libssl-dev \
-            clang \
-            mold
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libzstd-dev
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          # Xcode CLI tools are preinstalled on GitHub runners.
-          # Ensure cmake is available for native deps.
-          brew install cmake || true
+          brew list cmake >/dev/null 2>&1 || brew install cmake
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2

@@ -83,8 +83,8 @@ git push origin v0.1.0
 Assets:
 - `pass_smash-windows-x64.zip`
 - `pass_smash-linux-x64.tar.gz`
+- `pass_smash-linux-arm64.tar.gz`
 - `pass_smash-macos-arm64.tar.gz`
-- `pass_smash-macos-x64.tar.gz`
 
 
 ```bash

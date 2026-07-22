@@ -45,6 +45,7 @@ pub struct PassSmashApp {
 
     // Runtime
     running: bool,
+    dialog_open: bool,
     control: EngineControl,
     status_text: SharedString,
     search_space_hint: SharedString,
@@ -116,6 +117,7 @@ impl PassSmashApp {
             max_len_input,
             custom_input,
             running: false,
+            dialog_open: false,
             control: EngineControl::new(),
             status_text: Msg::Ready.get(locale).into(),
             search_space_hint: SharedString::default(),
@@ -262,17 +264,36 @@ impl PassSmashApp {
     }
 
     fn open_files(&mut self, cx: &mut Context<Self>) {
+        if self.dialog_open {
+            return;
+        }
+
         let locale = self.locale;
-        let paths = rfd::FileDialog::new()
+        let dialog = rfd::AsyncFileDialog::new()
             .set_title(i18n::open_dialog_title(locale))
             .add_filter(i18n::filter_supported(locale), &["zip", "7z", "rar", "pdf", "docx", "docm", "xlsx", "xlsm", "pptx", "pptm", "doc"])
             .add_filter(i18n::filter_all(locale), &["*"])
-            .pick_files()
-            .unwrap_or_default();
+            .pick_files();
 
-        if !paths.is_empty() {
-            self.add_paths(paths, cx);
-        }
+        self.dialog_open = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let paths = dialog.await.map_or_else(Vec::new, |files| {
+                files
+                    .into_iter()
+                    .map(|file| file.path().to_path_buf())
+                    .collect()
+            });
+            let _ = this.update(cx, |this, cx| {
+                this.dialog_open = false;
+                if paths.is_empty() {
+                    cx.notify();
+                } else {
+                    this.add_paths(paths, cx);
+                }
+            });
+        })
+        .detach();
     }
 
     fn clear_jobs(&mut self, cx: &mut Context<Self>) {
@@ -408,7 +429,7 @@ impl PassSmashApp {
                         Button::new("btn-lang")
                             .outline()
                             .label(Msg::LangSwitch.get(locale))
-                            .disabled(self.running)
+                            .disabled(self.running || self.dialog_open)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 let next = this.locale.toggle();
                                 this.set_locale(next, window, cx);
@@ -418,14 +439,14 @@ impl PassSmashApp {
                         Button::new("btn-add")
                             .primary()
                             .label(Msg::AddFiles.get(locale))
-                            .disabled(self.running)
+                            .disabled(self.running || self.dialog_open)
                             .on_click(cx.listener(|this, _, _window, cx| this.open_files(cx))),
                     )
                     .child(
                         Button::new("btn-clear")
                             .outline()
                             .label(Msg::Clear.get(locale))
-                            .disabled(self.running || self.jobs.is_empty())
+                            .disabled(self.running || self.dialog_open || self.jobs.is_empty())
                             .on_click(cx.listener(|this, _, _window, cx| this.clear_jobs(cx))),
                     ),
             )
@@ -528,7 +549,7 @@ impl PassSmashApp {
                             } else {
                                 Msg::Start.get(locale)
                             })
-                            .disabled(self.running || self.jobs.is_empty())
+                            .disabled(self.running || self.dialog_open || self.jobs.is_empty())
                             .on_click(cx.listener(|this, _, _window, cx| this.start(cx))),
                     )
                     .child(
@@ -742,6 +763,9 @@ impl Render for PassSmashApp {
                 if this.running {
                     this.status_text = Msg::CannotAddWhileRunning.get(this.locale).into();
                     cx.notify();
+                    return;
+                }
+                if this.dialog_open {
                     return;
                 }
                 let list: Vec<PathBuf> = paths.paths().to_vec();

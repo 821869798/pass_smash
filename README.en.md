@@ -2,7 +2,10 @@
 
 English | [中文](README.md)
 
-A desktop password unlocker for archives and PDFs, written in Rust with [GPUI Component](https://github.com/longbridge/gpui-component).
+A high-performance, low-memory desktop password unlocker written in Rust with
+[GPUI Component](https://github.com/longbridge/gpui-component). Its
+multi-threaded cracking engine makes full use of the CPU, while its natively
+rendered GUI uses no Electron, Tauri, or other WebView wrapper.
 
 ## Features
 
@@ -11,6 +14,8 @@ A desktop password unlocker for archives and PDFs, written in Rust with [GPUI Co
 - Charset options: digits / lower / upper / symbols / custom
 - Min / max password length
 - Multi-threaded brute force (auto CPU threads)
+- High-performance, low-memory native GPUI interface with no Electron, Tauri,
+  or WebView dependency
 - Live progress, rate, and cancel
 - **Chinese / English** UI toggle
 

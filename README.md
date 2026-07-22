@@ -2,7 +2,9 @@
 
 [English](README.en.md) | 中文
 
-用 Rust + [GPUI Component](https://github.com/longbridge/gpui-component) 编写的桌面密码解锁工具。
+使用 Rust 和 [GPUI Component](https://github.com/longbridge/gpui-component) 编写的高性能、
+低内存桌面密码解锁工具。多线程破解引擎可充分利用 CPU，GUI 为原生渲染，
+不使用 Electron、Tauri 或任何其他 WebView 套壳方案。
 
 ## 功能
 
@@ -11,6 +13,7 @@
 - 字符集：数字 / 小写 / 大写 / 符号 / 自定义
 - 最短 / 最长密码长度
 - 多线程暴力枚举（自动按 CPU 核心数）
+- 高性能、低内存占用的原生 GPUI 界面，不依赖 Electron、Tauri 或 WebView
 - 实时进度、速率、取消
 - 界面 **中 / 英** 一键切换
 

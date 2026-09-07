@@ -21,11 +21,11 @@ sevenz-rust2 = "0.21"
 unrar = "0.5"
 office-crypto = "0.2"
 
-# UI - GPUI Component (Longbridge)
-gpui = { git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component" }
-gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+# UI - GPUI Kit / GPUI Component (Longbridge)
+gpui = { package = "gpui-pre", version = "0.3.3" }
+gpui_platform = { package = "gpui-pre-platform", version = "0.3.3" }
+gpui-component = "0.6.0"
+gpui-component-assets = { package = "gpui-kit-assets", version = "0.6.0" }
 
 [profile.release]
 lto = true

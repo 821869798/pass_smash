@@ -14,19 +14,19 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use gpui::*;
-use gpui_component::*;
-use gpui_component_assets::Assets;
+use gpui_kit::*;
+use gpui_kit::component::*;
+use gpui_kit::assets::Assets;
 
 use app::PassSmashApp;
 
 fn main() {
     install_panic_log();
 
-    let app = gpui_platform::application().with_assets(Assets);
+    let app = gpui_kit::application().with_assets(Assets);
 
     app.run(move |cx| {
-        gpui_component::init(cx);
+        gpui_kit::init(cx);
 
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(960.), px(720.)), cx)),

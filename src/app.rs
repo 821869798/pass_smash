@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use gpui::*;
-use gpui_component::{
+use gpui_kit::*;
+use gpui_kit::component::{
     ActiveTheme, Disableable,
     button::{Button, ButtonVariants},
     checkbox::Checkbox,
